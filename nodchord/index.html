@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nodchord · shape a chord, nod to play</title>
+<meta name="description" content="A browser webcam instrument: shape a chord with your hands, nod to play it. Your thumb is the root; finger spread sets the notes.">
+<meta property="og:title" content="Nodchord">
+<meta property="og:description" content="Shape a chord with your hands, nod to play it. A webcam instrument that runs in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#07050f; --deep:#0d0920; --ink:#ece8ff; --dim:#8c86b9; --faint:#3a3364;
+  --cyan:#19f0ff; --mag:#ff2bd6; --amber:#ffd319; --red:#ff3b5c; --lime:#7dff6a;
+  --T:#ffd319; --I:#19f0ff; --M:#ff2bd6; --R:#ff7a1a; --P:#9d7bff;
+  --tech:"Chakra Petch",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--void);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
+body{
+  background:
+    radial-gradient(1100px 520px at 78% -12%, rgba(255,43,214,.13), transparent 62%),
+    radial-gradient(900px 480px at -8% 112%, rgba(25,240,255,.10), transparent 60%),
+    var(--void);
+  background-attachment:fixed;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(140,110,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(140,110,255,.07) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);
+}
+.wrap{position:relative;z-index:1;max-width:1680px;margin:0 auto;padding:12px 18px 28px}
+header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:10px}
+.brand h1{margin:0;font-family:var(--tech);font-weight:700;font-size:24px;letter-spacing:.06em;line-height:1;
+  color:#fff;text-shadow:2px 0 var(--mag),-2px 0 var(--cyan),0 0 18px rgba(255,43,214,.45)}
+.brand h1 span{color:var(--amber);text-shadow:0 0 14px rgba(255,211,25,.6)}
+#status{font-family:var(--tech);font-size:14px;color:var(--cyan);letter-spacing:.02em}
+#status.warn{color:var(--red)}
+#status::before{content:"▍";margin-right:6px;color:var(--mag)}
+
+.stage{position:relative;width:min(100%, calc(76vh * 16 / 9));aspect-ratio:16/9;margin:0 auto;background:#000;
+  border:1px solid rgba(255,43,214,.55);
+  box-shadow:0 0 0 1px rgba(255,43,214,.15),0 0 32px rgba(255,43,214,.18),inset 0 0 60px rgba(25,240,255,.06)}
+.stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform:scaleX(-1);filter:saturate(.75) contrast(1.05) brightness(.8)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(180deg,transparent 0 2px,rgba(0,0,0,.22) 2px 3px)}
+.stage .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:20px;z-index:2}
+.stage .empty p{margin:0;color:var(--dim);max-width:56ch}
+.stage.avatar video{opacity:0}
+.stage:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border:0;box-shadow:none}
+.recbadge{position:absolute;top:12px;right:14px;z-index:3;font-family:var(--tech);font-weight:700;font-size:14px;color:#fff;
+  background:rgba(255,59,92,.85);padding:3px 10px;box-shadow:0 0 16px rgba(255,59,92,.6)}
+.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px auto 0;width:min(100%, calc(76vh * 16 / 9))}
+.seg{display:flex;border:1px solid var(--faint)}
+.seg button{border:0;padding:7px 16px;color:var(--dim)}
+.seg button[aria-pressed=true]{color:var(--void);background:var(--mag);box-shadow:0 0 14px rgba(255,43,214,.5)}
+#recBtn.on{color:#fff;background:var(--red);border-color:var(--red)}
+
+.bar{display:grid;grid-template-columns:auto auto 1fr;gap:12px 32px;align-items:end;margin:14px auto 0;width:min(100%, calc(76vh * 16 / 9))}
+@media (max-width:900px){.bar{grid-template-columns:1fr}}
+.tabs{display:flex;border:1px solid var(--faint);align-self:center}
+.tabs button{border:0;border-radius:0;padding:9px 22px;font-size:16px;font-weight:600;background:transparent;color:var(--dim)}
+.tabs button[aria-selected=true]{color:var(--void);background:var(--cyan);box-shadow:0 0 16px rgba(25,240,255,.5)}
+.now{font-family:var(--tech);font-weight:700;font-size:52px;line-height:1;color:#fff4fd;min-width:4ch;
+  text-shadow:0 0 6px rgba(255,43,214,.9),0 0 22px rgba(255,43,214,.55),0 0 48px rgba(255,43,214,.3)}
+.preview{font-family:var(--tech);font-size:20px;color:var(--cyan);text-shadow:0 0 10px rgba(25,240,255,.45)}
+.lbl{font-size:13px;color:var(--dim)}
+.chips{display:grid;grid-template-columns:44px 1fr;gap:4px 10px;font-family:var(--tech);font-size:14px;align-items:center}
+.chips .who{color:var(--dim);font-size:12px}
+.chips .set{display:flex;gap:14px;flex-wrap:wrap}
+.chips span{display:flex;align-items:center;gap:6px;color:var(--dim)}
+.chips i{width:10px;height:10px;border:2px solid var(--c);transform:rotate(45deg);display:inline-block}
+.chips .on{color:var(--ink)}
+.chips .on i{background:var(--c);box-shadow:0 0 10px var(--c)}
+.chips .off{opacity:.4}
+.chips b{font-weight:600;color:var(--ink)}
+
+.panel{position:relative;width:min(100%, calc(76vh * 16 / 9));margin:16px auto 0;background:rgba(13,9,32,.78);border:1px solid rgba(25,240,255,.28);padding:18px 20px;backdrop-filter:blur(3px)}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;pointer-events:none}
+.panel::before{top:-1px;left:-1px;border-top:2px solid var(--mag);border-left:2px solid var(--mag)}
+.panel::after{bottom:-1px;right:-1px;border-bottom:2px solid var(--mag);border-right:2px solid var(--mag)}
+.cols{display:grid;grid-template-columns:1.1fr 1.2fr .9fr;gap:28px}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}}
+.panel h2{margin:0 0 8px;font-family:var(--tech);font-weight:600;font-size:19px;letter-spacing:.03em;color:#fff}
+.panel p{margin:0 0 10px;color:var(--dim);font-size:14px}
+
+select{font:inherit;font-family:var(--tech);font-size:14px;color:var(--ink);background:var(--deep);border:1px solid rgba(25,240,255,.6);padding:6px 10px;cursor:pointer}
+select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button{font:inherit;font-family:var(--tech);font-size:14px;color:var(--cyan);background:transparent;border:1px solid rgba(25,240,255,.6);padding:7px 14px;cursor:pointer;letter-spacing:.02em}
+button:hover:not(:disabled){background:rgba(25,240,255,.1);box-shadow:0 0 14px rgba(25,240,255,.35)}
+button:disabled{opacity:.35;cursor:default}
+button.hot{color:var(--void);background:var(--mag);border-color:var(--mag);font-weight:600;box-shadow:0 0 18px rgba(255,43,214,.45)}
+button.hot:hover:not(:disabled){background:#ff5fe0}
+button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row+.row{margin-top:10px}
+
+ol.steps{list-style:none;margin:0 0 10px;padding:0;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:26px 1fr;gap:8px;padding:6px 0;border-bottom:1px dashed var(--faint);color:var(--dim)}
+ol.steps li::before{content:counter(s);font-family:var(--tech);font-weight:700;color:var(--faint);font-size:17px;line-height:1.3}
+ol.steps li strong{display:block;font-family:var(--tech);font-weight:600;font-size:16px;letter-spacing:.04em;color:var(--ink)}
+ol.steps li small{font-size:13px}
+ol.steps li.active::before{color:var(--mag);text-shadow:0 0 10px var(--mag)}
+ol.steps li.active strong{color:#fff;text-shadow:0 0 12px rgba(255,43,214,.6)}
+ol.steps li.done::before{content:"✓";color:var(--cyan)}
+
+.models{font-family:var(--tech);font-size:14px;margin:0 0 4px;display:grid;grid-template-columns:44px 1fr;gap:4px 10px}
+.models .ok{color:var(--cyan)}
+.models .bad{color:var(--red)}
+.models .no{color:var(--dim)}
+label.tog{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);cursor:pointer}
+label.tog input{accent-color:var(--mag);width:16px;height:16px}
+label.rng{display:flex;align-items:center;gap:8px;font-size:14px}
+label.rng input{accent-color:var(--cyan);width:120px}
+.mono{font-family:var(--tech);color:var(--cyan)}
+kbd{font-family:var(--tech);font-size:12px;border:1px solid var(--faint);padding:0 5px;color:var(--ink)}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>NOD<span>CHORD</span></h1></div>
+    <div id="status">Loading the hand and face models</div>
+  </header>
+
+  <div class="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="hud"></canvas>
+    <div class="recbadge" id="recBadge" hidden>REC <span id="recTime">0:00</span></div>
+    <div class="empty" id="empty">
+      <p>Sit so your face is near the top of the frame. Palms toward the camera, right hand on the right half of the screen, left hand on the left.</p>
+      <button class="hot" id="startBtn" disabled>Start camera and sound</button>
+    </div>
+  </div>
+
+  <div class="tools">
+    <div class="seg" role="group" aria-label="What the stage shows">
+      <button id="viewCam" aria-pressed="true">Camera</button>
+      <button id="viewAv" aria-pressed="false">Avatar</button>
+    </div>
+    <button id="recBtn" disabled>● Record video</button>
+    <label class="tog"><input type="checkbox" id="mic"> Include my microphone</label>
+    <button id="fsBtn">Fullscreen</button>
+    <span class="lbl"><kbd>V</kbd> camera / avatar · <kbd>R</kbd> record · <kbd>F</kbd> fullscreen</span>
+  </div>
+
+  <div class="bar">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabCal" aria-selected="true">Calibrate</button>
+      <button role="tab" id="tabPlay" aria-selected="false">Play</button>
+    </div>
+    <div>
+      <div class="now" id="chordNow">—</div>
+      <div class="preview" id="chordPreview">—</div>
+      <div class="lbl">Top: last chord played. Below: what a nod would play now</div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="panel" id="calPanel">
+    <div class="cols">
+      <div>
+        <h2>Calibrate</h2>
+        <p>Your hands hold a shape and a nod plays it. Calibration first learns how big your nod is, then how far apart your fingers sit in two piano shapes. Both hands are captured together, but one hand alone also works.</p>
+        <div class="models" id="models"></div>
+      </div>
+      <div>
+        <ol class="steps" id="steps">
+          <li data-step="nod"><span><strong>Nod three times</strong><small>A normal, clear nod. This sets how big a nod has to be.</small></span></li>
+          <li data-step="align"><span><strong>Hands in the outlines</strong><small>Until the distance gauge turns green, then hold for a second.</small></span></li>
+          <li data-step="penta"><span><strong>Five-finger shape · nod ×4</strong><small>Right: thumb C to pinky G. Left: pinky C to thumb G. Relax and re-form the shape between nods.</small></span></li>
+          <li data-step="arp"><span><strong>C–E–G–C shape · nod ×4</strong><small>Right: thumb C, index E, middle G, pinky high C. Left: pinky C, middle E, index G, thumb high C.</small></span></li>
+        </ol>
+      </div>
+      <div>
+        <div class="row"><button class="hot" id="calStart" disabled>Start calibration</button></div>
+        <div class="row">
+          <button id="skipAlign" hidden>Skip alignment</button>
+          <button id="calCancel" hidden>Stop</button>
+          <button id="goPlay">Start playing</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="playPanel" hidden>
+    <div class="cols">
+      <div>
+        <h2>Play</h2>
+        <p>Shape a chord with one or both hands, then nod. Each thumb is a root; the other fingers play the key as far from the thumb as they are spread, upward for the right hand and downward for the left.</p>
+        <p>Curl a finger into the palm to leave it out of the chord. The notes above your fingertips show what the next nod will play.</p>
+      </div>
+      <div>
+        <p>Right root <kbd>←</kbd><kbd>→</kbd> white keys, <kbd>↑</kbd><kbd>↓</kbd> octave. Left root <kbd>A</kbd><kbd>D</kbd> white keys, <kbd>W</kbd><kbd>S</kbd> octave. Hold <kbd>Shift</kbd> to move by semitones. Click a key for the right root, right-click for the left.</p>
+        <div class="row"><span class="lbl">Right root</span><span class="mono" id="rootR">C4</span><span class="lbl">Left root</span><span class="mono" id="rootL">C3</span></div>
+        <div class="row"><label class="tog"><input type="checkbox" id="onlyExt" checked> Curled fingers stay silent</label></div>
+        <div class="row"><label class="tog"><input type="checkbox" id="black"> Use black keys (aim a finger between two white keys)</label></div>
+      </div>
+      <div>
+        <div class="row"><label class="rng">Sound <select id="inst"><option value="piano">Classic piano</option><option value="epiano">Electric piano</option><option value="guitar">Guitar</option></select></label><span class="lbl">or press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span></div>
+        <div class="row"><label class="rng">Nod sensitivity <input type="range" id="sens" min="0.5" max="2" step="0.1" value="1"><span class="mono" id="sensV">1.0×</span></label></div>
+        <div class="row"><label class="tog"><input type="checkbox" id="guides" checked> Show hand outlines</label></div>
+        <div class="row"><label class="tog"><input type="checkbox" id="sound" checked> Sound</label></div>
+        <div class="row"><button id="csvBtn" disabled>Export log</button><span class="lbl" id="logInfo">0 nods</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const MP_VERSION = "0.10.14";
+const HAND_MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const FACE_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const STORE_KEY = "nodchord.v1";
+
+// ───────── geometry ─────────
+const DEG = 180 / Math.PI;
+const sub = (a, b) => [a.x - b.x, a.y - b.y, a.z - b.z];
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const len = v => Math.hypot(v[0], v[1], v[2]);
+const norm = v => { const n = len(v) || 1e-9; return [v[0]/n, v[1]/n, v[2]/n]; };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const angle = (a, b) => Math.acos(clamp(dot(norm(a), norm(b)), -1, 1)) * DEG;
+const proj = (v, n) => { const d = dot(v, n); return [v[0]-d*n[0], v[1]-d*n[1], v[2]-d*n[2]]; };
+
+const FK = ["T","I","M","R","P"];
+const LONG = ["I","M","R","P"];
+const JOINTS = { I:[5,6,7,8], M:[9,10,11,12], R:[13,14,15,16], P:[17,18,19,20] };
+const TIP = { T:4, I:8, M:12, R:16, P:20 };
+const FNAME = { T:"Thumb", I:"Index", M:"Middle", R:"Ring", P:"Pinky" };
+const HNAME = { R:"Right", L:"Left" };
+
+// x_k: fingertip sideways position from the middle knuckle (palm widths).
+// flex_k: MCP + PIP bend in degrees (0 = straight). Used only to tell an extended finger from a curled one.
+function features(w, volar) {
+  const n = norm(cross(sub(w[5], w[0]), sub(w[17], w[0]))).map(v => v * volar);
+  const u = norm(proj(sub(w[9], w[0]), n));
+  const r = norm(proj(proj(sub(w[5], w[17]), n), u));
+  const pw = len(sub(w[5], w[17])) || 1e-9;
+  const f = {};
+  for (const k of LONG) {
+    const [m, p, d, tip] = JOINTS[k];
+    f[`x_${k}`] = dot(sub(w[tip], w[9]), r) / pw;
+    const mcp = Math.asin(clamp(dot(norm(sub(w[p], w[m])), n), -1, 1)) * DEG;
+    const pip = 180 - angle(sub(w[m], w[p]), sub(w[d], w[p]));
+    f[`flex_${k}`] = mcp + pip;
+  }
+  return f;
+}
+
+class OneEuro {
+  constructor(minCut = 1.5, beta = 0.8) { this.minCut = minCut; this.beta = beta; this.reset(); }
+  reset() { this.x = null; this.dx = 0; this.t = null; }
+  filter(x, t) {
+    if (this.t === null) { this.t = t; this.x = x; return x; }
+    const dt = Math.max((t - this.t) / 1000, 1e-3); this.t = t;
+    const al = c => 1 / (1 + 1 / (2 * Math.PI * c) / dt);
+    const ad = al(1); this.dx = ad * ((x - this.x) / dt) + (1 - ad) * this.dx;
+    const a = al(this.minCut + this.beta * Math.abs(this.dx));
+    return (this.x = a * x + (1 - a) * this.x);
+  }
+}
+const FEAT = [...LONG.map(k => `x_${k}`), ...LONG.map(k => `flex_${k}`)];
+
+// ───────── keyboard coordinates: white keys on integers, black keys on .5 ─────────
+const POS_IN_OCT = [0, .5, 1, 1.5, 2, 3, 3.5, 4, 4.5, 5, 5.5, 6];
+const midiToPos = m => Math.floor(m / 12) * 7 + POS_IN_OCT[((m % 12) + 12) % 12];
+function posToMidi(p) {
+  const o = Math.floor(p / 7), r = p - o * 7;
+  const pc = POS_IN_OCT.findIndex(v => Math.abs(v - r) < 1e-6);
+  return pc < 0 ? null : o * 12 + pc;
+}
+const PC = ["C","C♯","D","E♭","E","F","F♯","G","A♭","A","B♭","B"];
+const pcOf = m => ((m % 12) + 12) % 12;
+const noteName = m => PC[pcOf(m)] + (Math.floor(m / 12) - 1);
+
+const TEMPLATES = [
+  ["",[0,4,7]],["m",[0,3,7]],["dim",[0,3,6]],["aug",[0,4,8]],["sus4",[0,5,7]],["sus2",[0,2,7]],
+  ["7",[0,4,7,10]],["maj7",[0,4,7,11]],["m7",[0,3,7,10]],["m7♭5",[0,3,6,10]],["dim7",[0,3,6,9]],
+  ["6",[0,4,7,9]],["m6",[0,3,7,9]],["mMaj7",[0,3,7,11]],["7sus4",[0,5,7,10]],["add9",[0,2,4,7]],["m(add9)",[0,2,3,7]],
+  ["9",[0,2,4,7,10]],["maj9",[0,2,4,7,11]],["m9",[0,2,3,7,10]],["6/9",[0,2,4,7,9]],
+  ["7(no5)",[0,4,10]],["maj7(no5)",[0,4,11]],["m7(no5)",[0,3,10]],
+];
+const IVN = ["unison","m2","M2","m3","M3","P4","tritone","P5","m6","M6","m7","M7","octave"];
+function chordName(midis) {
+  const ms = [...new Set(midis)].sort((a, b) => a - b);
+  if (!ms.length) return "—";
+  if (ms.length === 1) return noteName(ms[0]);
+  const pcs = [...new Set(ms.map(pcOf))];
+  const bass = pcOf(ms[0]);
+  if (pcs.length === 1) return PC[bass] + " octaves";
+  if (pcs.length === 2 && ms.length === 2) { const d = ms[1] - ms[0]; return `${PC[bass]}–${PC[pcOf(ms[1])]} ${IVN[d] ?? d + " st"}`; }
+  for (const [sfx, tpl] of TEMPLATES) {
+    if (tpl.length !== pcs.length) continue;
+    for (const root of pcs) {
+      const set = pcs.map(p => (p - root + 12) % 12).sort((a, b) => a - b);
+      if (set.every((v, i) => v === tpl[i])) return PC[root] + sfx + (bass !== root ? "/" + PC[bass] : "");
+    }
+  }
+  return ms.map(m => PC[pcOf(m)]).join(" ");
+}
+
+// ───────── calibration shapes ─────────
+// d = white keys from the thumb's key (+ up for the right hand, − down for the left)
+const SHAPES = {
+  penta: { R: { thumbMidi: 60, layout: { T:0, I:1, M:2, R:3, P:4 } },  L: { thumbMidi: 55, layout: { T:0, I:-1, M:-2, R:-3, P:-4 } } },
+  arp:   { R: { thumbMidi: 60, layout: { T:0, I:2, M:4, P:7 } },        L: { thumbMidi: 60, layout: { T:0, I:-3, M:-5, P:-7 } } },
+};
+const NODS_PER_SHAPE = 4;
+
+// ───────── alignment guide ─────────
+const GUIDE = { R: { x: 0.70, y: 0.64 }, L: { x: 0.30, y: 0.64 }, palm: 0.08, tol: 0.15, holdMs: 1000 };
+const TEMPLATE = [[0,0],[-.35,-.25],[-.6,-.5],[-.8,-.75],[-.95,-1],[-.4,-1],[-.5,-1.45],[-.55,-1.75],[-.6,-2],
+  [-.1,-1.05],[-.12,-1.55],[-.13,-1.9],[-.14,-2.15],[.2,-1],[.27,-1.45],[.31,-1.75],[.34,-1.98],[.45,-.88],[.58,-1.2],[.66,-1.42],[.72,-1.62]];
+const TEMPLATE_PALM = Math.hypot(TEMPLATE[5][0] - TEMPLATE[17][0], TEMPLATE[5][1] - TEMPLATE[17][1]);
+
+// ───────── state ─────────
+const $ = id => document.getElementById(id);
+const video = $("video"), hud = $("hud"), hctx = hud.getContext("2d");
+let handLm = null, faceLm = null, ready = false, lastVideoTime = -1, cameraInfo = "";
+let mode = "cal", cal = null;
+const S = { black: false, sound: true, guides: true, onlyExt: true, sens: 1, inst: "piano", view: "camera" };
+const roots = { R: 60, L: 48 };
+let store = { R: null, L: null, nodThr: null };
+try { store = { ...store, ...JSON.parse(localStorage.getItem(STORE_KEY) || "{}") }; } catch {}
+const log = [];
+let lastRect = { x: 0, y: 0, w: 1, h: 1 };
+
+function makeHand(h) {
+  return { h, filters: Object.fromEntries(FEAT.map(k => [k, new OneEuro()])), buf: [], f: null, lm: null,
+    lastSeen: -Infinity, wx: null, wy: null, volar: null, snapPrev: {}, cur: null, ext: {}, sounding: {}, soundUntil: 0 };
+}
+const HANDS = { R: makeHand("R"), L: makeHand("L") };
+const active = H => performance.now() - H.lastSeen < 200;
+
+// ───────── model: white keys from thumb = a[finger] + b · sideways position ─────────
+const DEFAULT_A = { I:1.84, M:1.69, R:1.75, P:1.60 };
+function defaultModel(h) {
+  const s = h === "R" ? 1 : -1;
+  return { a: Object.fromEntries(LONG.map(k => [k, s * DEFAULT_A[k]])), b: -2.2 * s, acc: null, slopeOk: null };
+}
+const modelFor = h => store[h] ?? defaultModel(h);
+const predict = (M, k, x) => M.a[k] + M.b * x;
+function snap(H, k, p, sticky) {
+  const step = S.black ? 0.5 : 1, prev = H.snapPrev[k];
+  if (sticky && prev != null && Math.abs(p - prev) < step * 0.5 + 0.12) return prev;
+  let c = S.black ? Math.round(p * 2) / 2 : Math.round(p);
+  if (posToMidi(c) == null) c = Math.round(p);
+  if (sticky) H.snapPrev[k] = c;
+  return c;
+}
+function notesFrom(H, f, sticky = true) {
+  const M = modelFor(H.h), rp = midiToPos(roots[H.h]);
+  const out = { T: roots[H.h] };
+  for (const k of LONG) out[k] = posToMidi(snap(H, k, rp + predict(M, k, f[`x_${k}`]), sticky)) ?? roots[H.h];
+  return out;
+}
+// curled = bent more than 75°; extended again below 55° (hysteresis)
+function updateExt(H, f) { for (const k of LONG) { const v = f[`flex_${k}`]; if (H.ext[k] == null) H.ext[k] = v < 65; else if (H.ext[k] && v > 75) H.ext[k] = false; else if (!H.ext[k] && v < 55) H.ext[k] = true; } }
+
+// ───────── nod detection ─────────
+// p = how far the nose tip sits below the eye line, divided by face height. It changes with head pitch
+// but not with moving closer, farther or sideways. A nod is a quick excursion of p away from its slow baseline.
+const NOD = { base: null, state: "idle", peak: 0, hist: [], lastNod: -1e9, flash: 0, p: null, dev: 0 };
+const DEFAULT_NOD_THR = 0.035;
+const nodThr = () => (store.nodThr ?? DEFAULT_NOD_THR) / S.sens;
+const nodFilter = new OneEuro(3, 0.5);
+function pitchProxy(lm) {
+  const eye = { x: (lm[33].x + lm[263].x) / 2, y: (lm[33].y + lm[263].y) / 2 };
+  const fh = Math.hypot(lm[10].x - lm[152].x, lm[10].y - lm[152].y) || 1e-6;
+  return (lm[1].y - eye.y) / fh;
+}
+function nodStep(lm, t, thr, sign) {
+  if (!lm) { NOD.base = null; NOD.state = "idle"; NOD.hist.length = 0; NOD.p = null; return null; }
+  const p = nodFilter.filter(pitchProxy(lm), t);
+  NOD.p = p;
+  NOD.hist.push({ t, p }); while (NOD.hist.length && t - NOD.hist[0].t > 400) NOD.hist.shift();
+  if (NOD.base == null) NOD.base = p;
+  const dev = p - NOD.base; NOD.dev = dev;
+  let fired = null;
+  if (NOD.state === "idle") {
+    NOD.base += (p - NOD.base) * 0.02;                                        // slow baseline (~1.5 s at 30 fps)
+    const old = NOD.hist.find(e => t - e.t <= 160) ?? NOD.hist[0];
+    const dirOk = !sign || Math.sign(dev) === sign;
+    const big = Math.abs(dev) > thr && Math.abs(p - old.p) > 0.7 * thr;
+    if (dirOk && big && t - NOD.lastNod > 300) {
+      NOD.state = "nodding"; NOD.peak = Math.abs(dev); NOD.lastNod = t; NOD.flash = t; NOD.sign = Math.sign(dev); NOD.wrong = 0; fired = { t };
+    } else if (!dirOk && big && t - (NOD.lastWrong ?? 0) > 400) {
+      // a clear nod in the other direction: count it, in case the learned direction is wrong
+      NOD.wrong = (t - (NOD.lastWrong ?? 0) < 8000 ? (NOD.wrong ?? 0) : 0) + 1; NOD.lastWrong = t;
+    }
+  } else {
+    NOD.peak = Math.max(NOD.peak, Math.abs(dev));
+    const back = Math.abs(dev) < 0.35 * Math.max(thr, NOD.peak * 0.5);
+    // If the head never comes back to where it was (you leaned, looked down at your hands, moved closer),
+    // the old rest position is stale. Accept the new one instead of waiting for a return that never comes.
+    const stale = t - NOD.lastNod > 900;
+    if (back || stale) { NOD.state = "idle"; NOD.lastPeak = NOD.peak; if (stale && !back) { NOD.base = p; NOD.hist.length = 0; } }
+  }
+  return fired;
+}
+
+// ───────── sound: three instruments, all synthesized in the browser; a new nod replaces the hand's previous chord ─────────
+const INSTRUMENTS = { piano: "Classic piano", epiano: "Electric piano", guitar: "Guitar" };
+let ac = null, master = null, noiseBuf = null, audioOut = null;
+const voices = {}, ksCache = new Map();
+function initAudio() {
+  ac = new AudioContext({ latencyHint: "interactive" });
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; audioOut = comp;
+  master = ac.createGain(); master.gain.value = 0.9;
+  const verb = ac.createConvolver(); verb.buffer = makeImpulse(2.2);
+  const wet = ac.createGain(); wet.gain.value = 0.22;
+  master.connect(comp); master.connect(verb).connect(wet).connect(comp);
+  comp.connect(ac.destination);
+}
+function makeImpulse(sec) {
+  const sr = ac.sampleRate, n = Math.floor(sr * sec), b = ac.createBuffer(2, n, sr);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3.2); }
+  return b;
+}
+function noise() {
+  if (!noiseBuf) { const n = ac.sampleRate * 0.05 | 0; noiseBuf = ac.createBuffer(1, n, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; }
+  return noiseBuf;
+}
+// Piano: slightly stretched partials that die away faster the higher they are, plus a short hammer knock.
+function piano(fr, t, out, vel) {
+  const srcs = [], ring = 2.2 * Math.pow(261.6 / fr, 0.35);
+  const lp = ac.createBiquadFilter(); lp.type = "lowpass";
+  lp.frequency.setValueAtTime(Math.min(fr * 16, 14000), t); lp.frequency.exponentialRampToValueAtTime(Math.max(fr * 3, 500), t + 1.2);
+  lp.connect(out);
+  for (let n = 1; n <= 8; n++) {
+    const f = fr * n * Math.sqrt(1 + 0.0004 * n * n); if (f > 16000) break;
+    const o = ac.createOscillator(); o.frequency.value = f;
+    const g = ac.createGain(), a = vel * 0.22 / Math.pow(n, 1.25);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + 0.004); g.gain.setTargetAtTime(0, t + 0.006, ring / (1 + 0.5 * (n - 1)));
+    o.connect(g).connect(lp); o.start(t); o.stop(t + ring * 4); srcs.push(o);
+  }
+  const ns = ac.createBufferSource(); ns.buffer = noise();
+  const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = Math.min(fr * 4, 6000); bp.Q.value = 1.2;
+  const ng = ac.createGain(); ng.gain.setValueAtTime(vel * 0.08, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  ns.connect(bp).connect(ng).connect(out); ns.start(t); srcs.push(ns);
+  return srcs;
+}
+// Electric piano: two-operator FM with a bright tine "ping" at the attack and a gentle tremolo.
+function epiano(fr, t, out, vel) {
+  const car = ac.createOscillator(); car.frequency.value = fr;
+  const mod = ac.createOscillator(); mod.frequency.value = fr;
+  const mi = ac.createGain(); mi.gain.setValueAtTime(fr * 2.2, t); mi.gain.exponentialRampToValueAtTime(fr * 0.25, t + 0.9);
+  mod.connect(mi).connect(car.frequency);
+  const bell = ac.createOscillator(); bell.frequency.value = fr * 14;
+  const bi = ac.createGain(); bi.gain.setValueAtTime(fr * 1.2, t); bi.gain.exponentialRampToValueAtTime(1, t + 0.08);
+  bell.connect(bi).connect(car.frequency);
+  const ring = 2.6 * Math.pow(261.6 / fr, 0.25);
+  const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel * 0.26, t + 0.004); g.gain.setTargetAtTime(0, t + 0.01, ring);
+  const trem = ac.createOscillator(); trem.frequency.value = 4.6;
+  const td = ac.createGain(); td.gain.value = 0.1; const tg = ac.createGain(); tg.gain.value = 0.9;
+  trem.connect(td).connect(tg.gain);
+  car.connect(g).connect(tg).connect(out);
+  const srcs = [car, mod, bell, trem];
+  for (const o of srcs) { o.start(t); o.stop(t + ring * 5); }
+  return srcs;
+}
+// Guitar: Karplus–Strong plucked string, rendered once per note and cached.
+function ksBuffer(midi) {
+  if (ksCache.has(midi)) return ksCache.get(midi);
+  const sr = ac.sampleRate, fr = 440 * 2 ** ((midi - 69) / 12);
+  const N = Math.max(2, Math.floor(sr / fr - 0.5));
+  const len = Math.floor(sr * 3), d = new Float32Array(len);
+  for (let i = 0; i < N; i++) d[i] = Math.random() * 2 - 1;
+  for (let i = 1; i < N; i++) d[i] = 0.6 * d[i] + 0.4 * d[i - 1];        // a softer, finger-like pluck
+  const T60 = 3.2 * Math.pow(196 / fr, 0.5), rho = Math.exp(Math.log(0.001) / (fr * T60));
+  d[N] = rho * 0.5 * d[0];
+  for (let i = N + 1; i < len; i++) d[i] = rho * 0.5 * (d[i - N] + d[i - N - 1]);
+  const buf = ac.createBuffer(1, len, sr); buf.copyToChannel(d, 0);
+  const out = { buf, rate: fr / (sr / (N + 0.5)) };                       // correct the pitch error of an integer delay
+  ksCache.set(midi, out); return out;
+}
+function guitar(midi, fr, t, out, vel) {
+  const { buf, rate } = ksBuffer(midi);
+  const s = ac.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate;
+  const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = Math.min(fr * 12, 9000);
+  const body = ac.createBiquadFilter(); body.type = "peaking"; body.frequency.value = 180; body.Q.value = 1; body.gain.value = 5;
+  const g = ac.createGain(); g.gain.value = vel * 0.45;
+  s.connect(lp).connect(body).connect(g).connect(out); s.start(t);
+  return [s];
+}
+function noteOn(id, midi, delay = 0, vel = 0.9) {
+  if (!ac || !S.sound) return;
+  noteOff(id, delay);
+  const t = ac.currentTime + delay, fr = 440 * 2 ** ((midi - 69) / 12);
+  const out = ac.createGain(); out.connect(master);
+  const srcs = S.inst === "epiano" ? epiano(fr, t, out, vel) : S.inst === "guitar" ? guitar(midi, fr, t, out, vel) : piano(fr, t, out, vel);
+  voices[id] = { out, srcs };
+}
+function noteOff(id, delay = 0) {
+  const v = voices[id]; if (!v) return;
+  const t = ac.currentTime + delay;
+  v.out.gain.setTargetAtTime(0, t, 0.05);
+  for (const s of v.srcs) { try { s.stop(t + 0.4); } catch {} }
+  delete voices[id];
+}
+
+// ───────── startup ─────────
+async function init() {
+  try {
+    const fileset = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`);
+    handLm = await HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: HAND_MODEL, delegate: "GPU" }, runningMode: "VIDEO", numHands: 2,
+      minHandDetectionConfidence: 0.6, minHandPresenceConfidence: 0.6, minTrackingConfidence: 0.6,
+    });
+    faceLm = await FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: FACE_MODEL, delegate: "GPU" }, runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,
+    });
+    $("startBtn").disabled = false;
+    setStatus("Ready");
+  } catch (e) {
+    setStatus("Could not load the models. Check the network and reload.", true);
+  }
+}
+async function start() {
+  try {
+    initAudio();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: false });
+    video.srcObject = stream; await video.play();
+    const s = stream.getVideoTracks()[0].getSettings();
+    cameraInfo = `${s.width}×${s.height} ${s.frameRate?.toFixed?.(0) ?? "?"}fps`;
+    $("empty").hidden = true; ready = true; $("calStart").disabled = false; $("recBtn").disabled = false;
+    schedule();
+  } catch (e) {
+    setStatus("Could not open the camera. Allow access and open this page from localhost.", true);
+  }
+}
+const hasRVFC = "requestVideoFrameCallback" in HTMLVideoElement.prototype;
+function schedule() { hasRVFC ? video.requestVideoFrameCallback(onFrame) : requestAnimationFrame(onFrame); }
+function onFrame() {
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const t = performance.now();
+    const hands = handLm.detectForVideo(video, t);
+    const face = faceLm.detectForVideo(video, t + 0.001);
+    process(hands, face, t);
+  }
+  schedule();
+}
+
+// ───────── per frame ─────────
+function resetHand(H) {
+  H.buf.length = 0; H.cur = null; H.snapPrev = {}; H.volar = null; H.ext = {};
+  Object.values(H.filters).forEach(f => f.reset());
+}
+function assignHands(res) {
+  const dets = (res.landmarks ?? []).map((lm, i) => ({ i, sx: 1 - lm[9].x }));
+  if (dets.length >= 2) { dets.sort((a, b) => b.sx - a.sx); dets[0].h = "R"; dets[1].h = "L"; return dets.slice(0, 2); }
+  for (const d of dets) d.h = d.sx > 0.5 ? "R" : "L";
+  return dets;
+}
+let lastFace = null, lastBlend = {};
+function process(res, face, t) {
+  const seen = new Set();
+  for (const d of assignHands(res)) {
+    if (seen.has(d.h)) continue;
+    seen.add(d.h);
+    handleHand(HANDS[d.h], res.worldLandmarks[d.i], res.landmarks[d.i], t);
+  }
+  for (const h of ["R", "L"]) if (!seen.has(h) && t - HANDS[h].lastSeen > 150 && HANDS[h].lm) { resetHand(HANDS[h]); HANDS[h].lm = null; }
+
+  lastFace = face.faceLandmarks?.[0] ?? null;
+  lastBlend = Object.fromEntries((face.faceBlendshapes?.[0]?.categories ?? []).map(c => [c.categoryName, c.score]));
+  const thr = cal && cal.phase === "nod" ? 0.015 : nodThr();
+  const nod = nodStep(lastFace, t, thr, cal && cal.phase === "nod" ? null : store.nodSign ?? null);
+  if (nod) onNod(t);
+  if ((NOD.wrong ?? 0) >= 3 && store.nodSign) { store.nodSign = -store.nodSign; NOD.wrong = 0; save(); }
+  if (cal?.phase === "nod" && NOD.state === "idle" && NOD.lastPeak && cal.awaitPeak) { cal.peaks.push(NOD.lastPeak); cal.awaitPeak = false; NOD.lastPeak = 0; if (cal.peaks.length >= 3) finishNodCal(); else renderSteps(); }
+  if (cal?.phase === "align") alignStep(t);
+
+  for (const h of ["R", "L"]) { const H = HANDS[h]; if (H.soundUntil && t > H.soundUntil) { H.sounding = {}; H.soundUntil = 0; } }
+  if (!cal) {
+    const hs = ["R", "L"].filter(h => seen.has(h)).map(h => HNAME[h]);
+    setStatus(`${hs.length ? hs.join(" + ") + " hand" : "No hands"} · ${lastFace ? "face tracked" : "face not found"} · ${cameraInfo}`, !lastFace);
+  }
+  draw(t);
+}
+function handleHand(H, world, lm, t) {
+  const fresh = t - H.lastSeen > 150;
+  if (fresh || (H.wx != null && Math.hypot(lm[0].x - H.wx, lm[0].y - H.wy) > 0.15)) resetHand(H);
+  H.lastSeen = t; H.lm = lm; H.wx = lm[0].x; H.wy = lm[0].y;
+  const n0 = norm(cross(sub(world[5], world[0]), sub(world[17], world[0])));
+  if (H.volar == null) H.volar = n0[2] < 0 ? 1 : -1;
+  else if (n0[2] * H.volar > 0.25) H.volar = -H.volar;
+  const raw = features(world, H.volar);
+  const f = {}; for (const k of FEAT) f[k] = H.filters[k].filter(raw[k], t);
+  H.f = f; updateExt(H, f);
+  H.cur = notesFrom(H, f, true);
+  H.buf.push({ t, f, w: world, ext: { ...H.ext }, notes: H.cur });
+  while (H.buf.length && t - H.buf[0].t > 600) H.buf.shift();
+}
+function atTime(H, t) { let pick = H.buf[0]; for (const e of H.buf) if (e.t <= t) pick = e; return pick; }
+const worldCols = w => w ? w.flatMap(p => [p.x.toFixed(5), p.y.toFixed(5), p.z.toFixed(5)]) : Array(63).fill("");
+
+// A nod: read each visible hand as it was just before the head started moving.
+function onNod(t) {
+  if (cal) {
+    if (cal.phase === "nod") { cal.awaitPeak = true; cal.signs.push(NOD.sign); return; }
+    if (cal.phase === "shapes") return captureShape(t);
+    return;
+  }
+  if (mode !== "play") return;
+  let any = false;
+  for (const h of ["R", "L"]) {
+    const H = HANDS[h]; if (!active(H) || !H.buf.length) continue;
+    const g = atTime(H, t - 80);
+    const notes = g.notes;
+    for (const k of FK) noteOff(h + k);
+    H.sounding = {};
+    const play = FK.filter(k => k === "T" || !S.onlyExt || g.ext[k]).sort((a, b) => notes[a] - notes[b]);
+    const strum = S.inst === "guitar" ? 0.022 : 0;                       // guitar rolls the chord low to high
+    play.forEach((k, i) => {
+      H.sounding[k] = notes[k]; noteOn(h + k, notes[k], i * strum);
+      if (H.lm) { const p = H.lm[TIP[k]]; FX.pops.push({ t0: t + i * strum * 1000, nx: 1 - p.x, ny: p.y, text: noteName(notes[k]), col: COL[k] }); }
+    });
+    H.soundUntil = t + 2500; any = true;
+    log.push([(t / 1000).toFixed(3), "play", h, "", NOD.peak.toFixed(4),
+      ...LONG.map(k => g.f[`x_${k}`].toFixed(4)), ...LONG.map(k => ""), ...LONG.map(k => g.ext[k] ? 1 : 0),
+      ...FK.map(k => H.sounding[k] ?? ""), ...worldCols(g.w)]);
+  }
+  if (any) { updateLogInfo(); shockwave(t); }
+}
+// ───────── nod effects ─────────
+const FX = { waves: [], pops: [], flash: -1e9 };
+function shockwave(t) {
+  const nx = lastFace ? 1 - lastFace[1].x : 0.5, ny = lastFace ? lastFace[1].y : 0.3;
+  FX.waves.push({ t0: t, nx, ny }); FX.flash = t;
+}
+
+// ───────── calibration ─────────
+function calBegin() {
+  cal = { phase: "nod", peaks: [], signs: [], nodIdx: 0, awaitPeak: false, held: 0, lastT: 0, shape: "penta", count: 0, samples: [] };
+  $("calStart").hidden = true; $("calCancel").hidden = false; $("skipAlign").hidden = true;
+  renderSteps();
+}
+function calCancel() {
+  cal = null;
+  $("calStart").hidden = false; $("calCancel").hidden = true; $("skipAlign").hidden = true;
+  renderSteps();
+}
+function finishNodCal() {
+  const s = [...cal.peaks].sort((a, b) => a - b), med = s[1];
+  store.nodThr = clamp(0.45 * med, 0.012, 0.08);
+  store.nodSign = cal.signs.reduce((a, b) => a + b, 0) >= 0 ? 1 : -1;
+  save();
+  cal.phase = "align"; cal.held = 0; cal.lastT = 0; $("skipAlign").hidden = false;
+  renderSteps();
+}
+function alignState(lm, h, R) {
+  if (!lm) return null;
+  const P = i => [R.x + (1 - lm[i].x) * R.w, R.y + lm[i].y * R.h];
+  const [ax, ay] = P(5), [bx, by] = P(17), [wx, wy] = P(0);
+  const palm = Math.hypot(ax - bx, ay - by), target = GUIDE.palm * R.w;
+  const ratio = palm / target, dx = (wx - (R.x + GUIDE[h].x * R.w)) / R.w, dy = (wy - (R.y + GUIDE[h].y * R.h)) / R.h;
+  const sizeOk = Math.abs(ratio - 1) <= GUIDE.tol, posOk = Math.abs(dx) < 0.08 && Math.abs(dy) < 0.12;
+  return { ratio, dx, dy, sizeOk, posOk, ok: sizeOk && posOk };
+}
+function alignStep(t) {
+  const hs = ["R", "L"].filter(h => active(HANDS[h]));
+  const ok = hs.length > 0 && hs.every(h => alignState(HANDS[h].lm, h, lastRect)?.ok);
+  const dt = cal.lastT && t - cal.lastT < 200 ? t - cal.lastT : 0;
+  cal.held = ok ? cal.held + dt : 0; cal.lastT = t;
+  if (cal.held >= GUIDE.holdMs) startShapes();
+}
+function startShapes() { cal.phase = "shapes"; cal.shape = "penta"; cal.count = 0; cal.shapeStart = performance.now(); $("skipAlign").hidden = true; renderSteps(); }
+function captureShape(t) {
+  let got = 0;
+  for (const h of ["R", "L"]) {
+    const H = HANDS[h]; if (!active(H) || !H.buf.length) continue;
+    const g = atTime(H, t - 80), lay = SHAPES[cal.shape][h].layout;
+    for (const k of LONG) if (lay[k] != null) cal.samples.push({ h, k, d: lay[k], x: g.f[`x_${k}`], nod: cal.nodIdx });
+    log.push([(t / 1000).toFixed(3), "cal", h, cal.shape, NOD.peak.toFixed(4),
+      ...LONG.map(k => g.f[`x_${k}`].toFixed(4)), ...LONG.map(k => lay[k] ?? ""), ...LONG.map(k => g.ext[k] ? 1 : 0),
+      ...FK.map(() => ""), ...worldCols(g.w)]);
+    // play the target shape back so you hear what was captured
+    const M = SHAPES[cal.shape][h];
+    for (const k of FK) if (M.layout[k] != null) noteOn(h + k, posToMidi(midiToPos(M.thumbMidi) + M.layout[k]));
+    shockwave(t);
+    got++;
+  }
+  if (!got) { setStatus("No hand was visible at that nod. Try again.", true); return; }
+  cal.nodIdx++;
+  updateLogInfo();
+  cal.count++;
+  if (cal.count >= NODS_PER_SHAPE) {
+    if (cal.shape === "penta") { cal.shape = "arp"; cal.count = 0; }
+    else return finishShapes();
+  }
+  renderSteps();
+}
+// One shared scale (keys per palm width) for all fingers of a hand, plus a per-finger offset.
+function fitModel(samples, h) {
+  const s = h === "R" ? 1 : -1, def = defaultModel(h);
+  const by = {}; for (const e of samples) (by[e.k] ??= []).push(e);
+  let num = 0, den = 0;
+  for (const k in by) {
+    const g = by[k]; if (g.length < 2) continue;
+    const mx = g.reduce((a, e) => a + e.x, 0) / g.length, md = g.reduce((a, e) => a + e.d, 0) / g.length;
+    for (const e of g) { num += (e.x - mx) * (e.d - md); den += (e.x - mx) ** 2; }
+  }
+  let b = den > 1e-6 ? num / den : NaN;
+  const slopeOk = Number.isFinite(b) && b * s < 0 && Math.abs(b) >= 1 && Math.abs(b) <= 8;
+  if (!slopeOk) b = def.b;
+  const a = {};
+  for (const k of LONG) { const g = by[k]; a[k] = g ? g.reduce((acc, e) => acc + e.d - b * e.x, 0) / g.length : def.a[k]; }
+  return { a, b, slopeOk };
+}
+function finishShapes() {
+  for (const h of ["R", "L"]) {
+    const sm = cal.samples.filter(e => e.h === h);
+    if (sm.length < 8) continue;
+    const m = fitModel(sm, h);
+    // leave out one whole nod at a time, then check every finger of that nod
+    const nods = [...new Set(sm.map(e => e.nod))];
+    let ok = 0, all = 0;
+    for (const n of nods) {
+      const mm = fitModel(sm.filter(e => e.nod !== n), h);
+      for (const e of sm.filter(e => e.nod === n)) { all++; if (Math.round(mm.a[e.k] + mm.b * e.x) === e.d) ok++; }
+    }
+    store[h] = { ...m, acc: [ok, all] };
+  }
+  save();
+  cal = null;
+  $("calStart").hidden = false; $("calCancel").hidden = true;
+  renderSteps();
+}
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch {} }
+
+function renderSteps() {
+  const order = ["nod", "align", "penta", "arp"];
+  const cur = !cal ? null : cal.phase === "shapes" ? cal.shape : cal.phase;
+  document.querySelectorAll("#steps li").forEach(li => {
+    const s = li.dataset.step;
+    li.classList.toggle("active", s === cur);
+    li.classList.toggle("done", !!cur && order.indexOf(s) < order.indexOf(cur));
+  });
+  const nt = store.nodThr ? `nod threshold ${store.nodThr.toFixed(3)}` : "nod not calibrated";
+  $("models").innerHTML = `<span class="lbl">Nod</span><span class="${store.nodThr ? "ok" : "no"}">${nt}</span>` + ["R", "L"].map(h => {
+    const M = store[h];
+    if (!M) return `<span class="lbl">${HNAME[h]}</span><span class="no">Not calibrated, using defaults</span>`;
+    const [ok, all] = M.acc, pct = all ? Math.round(ok / all * 100) : 0;
+    const note = !M.slopeOk ? ". The two shapes were too similar to learn a scale; default scale used" : "";
+    return `<span class="lbl">${HNAME[h]}</span><span class="${pct < 70 || !M.slopeOk ? "bad" : "ok"}">${ok} of ${all} finger positions predicted on the right key (${pct}%)${note}</span>`;
+  }).join("");
+}
+
+// ───────── drawing ─────────
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL = {}; for (const k of FK) COL[k] = css(`--${k}`);
+const C = { cyan: css("--cyan"), mag: css("--mag"), lime: css("--lime"), red: css("--red"), amber: css("--amber") };
+const FONT_TECH = css("--tech"), FONT_BODY = css("--body");
+const EDGES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+let keyRects = [];
+function hexA(hex, a) { const n = parseInt(hex.replace("#", ""), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
+function videoRect(W, H) {
+  const vw = video.videoWidth || 16, vh = video.videoHeight || 9, va = vw / vh;
+  if (W / H > va) { const w = H * va; return { x: (W - w) / 2, y: 0, w, h: H }; }
+  const h = W / va; return { x: 0, y: (H - h) / 2, w: W, h };
+}
+function glow(ctx, color, blur) { ctx.shadowColor = color; ctx.shadowBlur = blur; ctx.strokeStyle = color; }
+
+function draw(t) {
+  const dpr = window.devicePixelRatio || 1, W = hud.clientWidth, Hh = hud.clientHeight;
+  if (hud.width !== Math.round(W * dpr) || hud.height !== Math.round(Hh * dpr)) { hud.width = Math.round(W * dpr); hud.height = Math.round(Hh * dpr); }
+  const ctx = hctx; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, Hh);
+  if (!ready) return;
+  const R = videoRect(W, Hh); lastRect = R;
+  if (S.view === "avatar") { drawBackdrop(ctx, R, t); drawAvatar(ctx, R, t); }
+
+  const targets = {}, downs = {}, rootMarks = {}, labels = { R: {}, L: {} };
+  let lo, hi;
+  const calShapes = cal && cal.phase === "shapes";
+  if (calShapes) {
+    for (const h of ["R", "L"]) {
+      const sh = SHAPES[cal.shape][h], tp = midiToPos(sh.thumbMidi);
+      rootMarks[sh.thumbMidi] = rootMarks[sh.thumbMidi] ? "RL" : h;
+      for (const [k, d] of Object.entries(sh.layout)) { const m = posToMidi(tp + d); targets[m] ??= k; labels[h][k] = PC[pcOf(m)]; }
+    }
+    lo = midiToPos(48) - 1; hi = midiToPos(72) + 1;
+  } else {
+    const pR = midiToPos(roots.R), pL = midiToPos(roots.L);
+    lo = Math.floor(Math.min(pL - 8, pR - 1)); hi = Math.ceil(Math.max(pR + 8, pL + 1));
+    if (hi - lo > 40) { lo = Math.floor(pL - 6); hi = Math.ceil(pR + 6); }
+    rootMarks[roots.R] = "R"; rootMarks[roots.L] = rootMarks[roots.L] ? "RL" : "L";
+    if (mode === "play" && !cal) for (const h of ["R", "L"]) {
+      const H = HANDS[h]; if (!active(H) || !H.cur) continue;
+      for (const k of FK) {
+        const silent = k !== "T" && S.onlyExt && !H.ext[k];
+        if (!silent) targets[H.cur[k]] ??= k;
+        labels[h][k] = silent ? "·" : noteName(H.cur[k]);
+      }
+    }
+  }
+  for (const h of ["R", "L"]) for (const k in HANDS[h].sounding) downs[HANDS[h].sounding[k]] = k;
+
+  drawKeyboard(ctx, R, lo, hi, targets, downs, rootMarks, t);
+  const showGuides = cal ? cal.phase !== "nod" : mode === "play" && S.guides;
+  if (showGuides) for (const h of ["R", "L"]) drawGuide(ctx, R, h, t, !(cal && cal.phase === "align"));
+  for (const h of ["R", "L"]) { const H = HANDS[h]; if (H.lm && active(H)) drawHand(ctx, R, H, labels[h]); }
+  drawFace(ctx, R, t);
+  drawFX(ctx, R, t);
+  if (cal) drawPrompt(ctx, R);
+  if (rec) compositeRec(R, dpr);
+  renderReadout();
+}
+
+function drawKeyboard(ctx, R, lo, hi, targets, downs, rootMarks, t) {
+  const nW = hi - lo + 1;
+  const kx = R.x + R.w * 0.015, kw = R.w * 0.97, ky = R.y + R.h * 0.685, kh = R.h * 0.295;
+  const ww = kw / nW, bw = ww * 0.58, bh = kh * 0.6;
+  const keys = [];
+  for (let i = 0; i < nW; i++) keys.push({ m: posToMidi(lo + i), x: kx + i * ww, y: ky, w: ww, h: kh, black: false });
+  for (let i = 0; i < nW - 1; i++) { const m = posToMidi(lo + i + 0.5); if (m != null) keys.push({ m, x: kx + (i + 1) * ww - bw / 2, y: ky, w: bw, h: bh, black: true }); }
+  keyRects = keys;
+  ctx.save();
+  ctx.fillStyle = "rgba(7,5,15,.34)"; ctx.fillRect(kx - 6, ky - 6, kw + 12, kh + 12);
+  for (const k of keys) {
+    const dn = downs[k.m], tg = targets[k.m];
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = dn ? hexA(COL[dn], .72) : k.black ? "rgba(10,4,24,.82)" : "rgba(236,232,255,.06)";
+    ctx.fillRect(k.x + 1, k.y, k.w - 2, k.h);
+    ctx.lineWidth = 1; glow(ctx, k.black ? "rgba(255,43,214,.55)" : "rgba(25,240,255,.42)", 4);
+    ctx.strokeRect(k.x + 1.5, k.y + .5, k.w - 3, k.h - 1);
+    if (dn) { ctx.shadowColor = COL[dn]; ctx.shadowBlur = 30; ctx.fillStyle = hexA(COL[dn], .3); ctx.fillRect(k.x + 1, k.y, k.w - 2, k.h); }
+    if (tg && !dn) { ctx.lineWidth = 2.5; glow(ctx, hexA(COL[tg], .85), 14); ctx.strokeRect(k.x + 4, k.y + 3, k.w - 8, k.h - 6); }
+    if (!k.black && pcOf(k.m) === 0) {
+      ctx.shadowBlur = 0; ctx.fillStyle = "rgba(236,232,255,.6)"; ctx.font = `600 ${Math.max(10, ww * .28)}px ${FONT_TECH}`;
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillText(noteName(k.m), k.x + k.w / 2, k.y + k.h - 6);
+    }
+    if (rootMarks[k.m]) {
+      const cx = k.x + k.w / 2, cy = k.y - 8;
+      ctx.fillStyle = COL.T; ctx.shadowColor = COL.T; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.moveTo(cx - 6, cy - 6); ctx.lineTo(cx + 6, cy - 6); ctx.lineTo(cx, cy + 1); ctx.closePath(); ctx.fill();
+      ctx.font = `700 12px ${FONT_TECH}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillText(rootMarks[k.m], cx, cy - 8);
+    }
+  }
+  ctx.restore();
+}
+
+function drawGuide(ctx, R, h, t, faint) {
+  const H = HANDS[h];
+  const a = active(H) ? alignState(H.lm, h, R) : null;
+  const scale = GUIDE.palm * R.w / TEMPLATE_PALM, mir = h === "R" ? 1 : -1;
+  const ox = R.x + GUIDE[h].x * R.w, oy = R.y + GUIDE[h].y * R.h;
+  const pt = i => [ox + mir * TEMPLATE[i][0] * scale, oy + TEMPLATE[i][1] * scale];
+  const col = a?.ok ? C.lime : C.mag;
+  ctx.save();
+  ctx.globalAlpha = faint ? 0.25 : 1;
+  ctx.setLineDash([7, 6]); ctx.lineDashOffset = -t / 40;
+  ctx.lineWidth = 3; ctx.lineCap = "round"; glow(ctx, col, 18);
+  for (const [i, j] of EDGES) { const [x1, y1] = pt(i), [x2, y2] = pt(j); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.setLineDash([]);
+  for (const k of FK) { const [x, y] = pt(TIP[k]); ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke(); }
+  if (faint && (!a || a.ok)) { ctx.restore(); return; }
+  ctx.globalAlpha = 1;
+  const gw = Math.max(160, R.w * 0.15), gx = ox - gw / 2, gy = oy + 24;
+  ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = "rgba(236,232,255,.35)"; ctx.strokeRect(gx, gy, gw, 10);
+  const okL = gx + gw * (0.5 - 0.5 * GUIDE.tol / 0.4), okR = gx + gw * (0.5 + 0.5 * GUIDE.tol / 0.4);
+  ctx.fillStyle = hexA(C.lime, .22); ctx.fillRect(okL, gy, okR - okL, 10);
+  let label = `PUT YOUR ${HNAME[h].toUpperCase()} HAND HERE`, lc = C.mag;
+  if (a) {
+    const mx = gx + gw * (0.5 + 0.5 * clamp((a.ratio - 1) / 0.4, -1, 1));
+    ctx.fillStyle = a.sizeOk ? C.lime : C.red; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14; ctx.fillRect(mx - 3, gy - 5, 6, 20);
+    if (!a.sizeOk) { label = a.ratio < 1 ? "MOVE CLOSER" : "MOVE BACK"; lc = C.red; }
+    else if (!a.posOk) { label = Math.abs(a.dx) > 0.08 ? (a.dx > 0 ? "SHIFT LEFT" : "SHIFT RIGHT") : (a.dy > 0 ? "RAISE YOUR HAND" : "LOWER YOUR HAND"); lc = C.amber; }
+    else { label = cal?.phase === "align" ? "HOLD STILL" : "DISTANCE OK"; lc = C.lime; }
+  }
+  ctx.font = `700 14px ${FONT_TECH}`; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillStyle = lc; ctx.shadowColor = lc; ctx.shadowBlur = 12; ctx.fillText(label, ox, gy + 18);
+  if (cal?.phase === "align" && cal.held > 0) {
+    const [wx, wy] = pt(0);
+    ctx.lineWidth = 4; glow(ctx, C.lime, 16);
+    ctx.beginPath(); ctx.arc(wx, wy - 0.9 * scale, 22, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, cal.held / GUIDE.holdMs)); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHand(ctx, R, H, labels) {
+  const lm = H.lm;
+  const P = i => [R.x + (1 - lm[i].x) * R.w, R.y + lm[i].y * R.h];
+  ctx.save();
+  if (S.view === "avatar") {                                          // cartoon gloves instead of a bare skeleton
+    const pw = Math.hypot(P(5)[0] - P(17)[0], P(5)[1] - P(17)[1]);
+    ctx.fillStyle = "#24104a"; ctx.strokeStyle = "#24104a"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); for (const [i, j] of [[0,1],[1,5],[5,9],[9,13],[13,17],[17,0]]) { const [x, y] = P(i); j === 1 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.closePath(); ctx.fill();
+    ctx.lineWidth = pw * 0.3;
+    for (const [a, b] of EDGES) { const [x1, y1] = P(a), [x2, y2] = P(b); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+    ctx.lineWidth = 2; glow(ctx, hexA(C.mag, .9), 12);
+    ctx.beginPath(); for (const i of [0, 1, 5, 9, 13, 17]) { const [x, y] = P(i); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.closePath(); ctx.stroke();
+  }
+  ctx.lineWidth = 1.5; glow(ctx, "rgba(25,240,255,.5)", 6);
+  for (const [a, b] of EDGES) { const [x1, y1] = P(a), [x2, y2] = P(b); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  const [wx, wy] = P(0);
+  ctx.font = `700 13px ${FONT_TECH}`; ctx.fillStyle = "rgba(236,232,255,.7)"; ctx.shadowBlur = 0; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillText(H.h === "R" ? "RIGHT" : "LEFT", wx, wy + 8);
+  for (const k of FK) {
+    const [x, y] = P(TIP[k]); const on = H.sounding[k] != null;
+    const curled = k !== "T" && H.ext[k] === false;
+    ctx.globalAlpha = curled && S.onlyExt ? 0.35 : 1;
+    ctx.lineWidth = 2.5; glow(ctx, COL[k], on ? 22 : 10);
+    ctx.beginPath(); ctx.arc(x, y, on ? 13 : 9, 0, Math.PI * 2); ctx.stroke();
+    if (on) { ctx.fillStyle = hexA(COL[k], .7); ctx.fill(); }
+    if (labels[k]) {
+      ctx.font = `700 15px ${FONT_TECH}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.shadowColor = COL[k]; ctx.shadowBlur = 12; ctx.fillStyle = "#fff"; ctx.fillText(labels[k], x, y - 16);
+    }
+  }
+  ctx.restore();
+}
+
+// ───────── avatar mode: an original neon character driven by your face ─────────
+const AV = { x: null, y: null, s: null, roll: 0, yaw: 0, pitch: 0, bodyX: null, blinkL: 0, blinkR: 0, jaw: 0, smile: 0 };
+const lerp = (a, b, k) => a == null ? b : a + (b - a) * k;
+function updateAvatar(R) {
+  if (!lastFace) return AV.x != null;
+  const P = i => [R.x + (1 - lastFace[i].x) * R.w, R.y + lastFace[i].y * R.h];
+  const a = P(263), b = P(33), n = P(1), cl = P(234), cr = P(454);  // 263 = your left eye, which is on screen-left in the mirror
+  const faceW = Math.hypot(cl[0] - cr[0], cl[1] - cr[1]);
+  AV.x = lerp(AV.x, (a[0] + b[0]) / 2, 0.55); AV.y = lerp(AV.y, ((a[1] + b[1]) / 2 + n[1]) / 2, 0.55);
+  AV.s = lerp(AV.s, faceW * 0.62, 0.3);
+  AV.roll = lerp(AV.roll, Math.atan2(b[1] - a[1], b[0] - a[0]), 0.5);
+  AV.yaw = lerp(AV.yaw, clamp((n[0] - (cl[0] + cr[0]) / 2) / faceW, -0.4, 0.4), 0.5);
+  AV.pitch = lerp(AV.pitch, clamp(NOD.dev ?? 0, -0.15, 0.15), 0.6);
+  AV.bodyX = lerp(AV.bodyX, AV.x, 0.12);
+  const bs = k => lastBlend[k] ?? 0;
+  AV.blinkL = lerp(AV.blinkL, bs("eyeBlinkLeft"), 0.6); AV.blinkR = lerp(AV.blinkR, bs("eyeBlinkRight"), 0.6);
+  AV.jaw = lerp(AV.jaw, bs("jawOpen"), 0.5); AV.smile = lerp(AV.smile, (bs("mouthSmileLeft") + bs("mouthSmileRight")) / 2, 0.4);
+  return true;
+}
+function drawBackdrop(ctx, R, t) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, R.y, 0, R.y + R.h);
+  g.addColorStop(0, "#07031a"); g.addColorStop(0.55, "#1c0a3e"); g.addColorStop(0.62, "#3a0d4a"); g.addColorStop(1, "#08041a");
+  ctx.fillStyle = g; ctx.fillRect(R.x, R.y, R.w, R.h);
+  const hy = R.y + R.h * 0.6, sx = R.x + R.w / 2, sr = R.h * 0.2;  // sun on the horizon, cut by bands
+  const sg = ctx.createLinearGradient(0, hy - sr, 0, hy);
+  sg.addColorStop(0, "#ffd319"); sg.addColorStop(1, "#ff2bd6");
+  ctx.save(); ctx.beginPath(); ctx.rect(R.x, hy - sr, R.w, sr); ctx.clip();
+  ctx.globalAlpha = 0.55; ctx.fillStyle = sg; ctx.shadowColor = "#ff2bd6"; ctx.shadowBlur = 40;
+  ctx.beginPath(); ctx.arc(sx, hy, sr, Math.PI, 0); ctx.fill();
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.fillStyle = "#1c0a3e";
+  for (let i = 0; i < 6; i++) { const yy = hy - sr * (0.08 + i * 0.13); ctx.fillRect(sx - sr, yy, sr * 2, 2 + i * 0.8); }
+  ctx.restore();
+  ctx.strokeStyle = "rgba(25,240,255,.35)"; ctx.lineWidth = 1;     // floor grid rolling toward you
+  ctx.beginPath(); ctx.moveTo(R.x, hy); ctx.lineTo(R.x + R.w, hy); ctx.stroke();
+  const off = (t / 1400) % 1;
+  for (let i = 0; i < 14; i++) { const k = (i + off) / 14, yy = hy + (R.y + R.h - hy) * k * k; ctx.globalAlpha = 0.15 + 0.5 * k; ctx.beginPath(); ctx.moveTo(R.x, yy); ctx.lineTo(R.x + R.w, yy); ctx.stroke(); }
+  ctx.globalAlpha = 0.35;
+  for (let i = -12; i <= 12; i++) { ctx.beginPath(); ctx.moveTo(sx + i * R.w * 0.012, hy); ctx.lineTo(sx + i * R.w * 0.11, R.y + R.h); ctx.stroke(); }
+  ctx.restore();
+}
+function drawAvatar(ctx, R, t) {
+  if (!updateAvatar(R)) return;
+  const s = AV.s, glowNod = Math.max(0, 1 - (t - FX.flash) / 400);
+  ctx.save();
+  // body: rounded shoulders that trail the head a little
+  ctx.save(); ctx.translate(AV.bodyX, AV.y + s * 2.05);
+  ctx.beginPath(); ctx.moveTo(-s * 1.7, s * 1.6); ctx.quadraticCurveTo(-s * 1.65, -s * 0.55, 0, -s * 0.6); ctx.quadraticCurveTo(s * 1.65, -s * 0.55, s * 1.7, s * 1.6); ctx.closePath();
+  const bg = ctx.createLinearGradient(0, -s * 0.6, 0, s * 1.6); bg.addColorStop(0, "#2a1158"); bg.addColorStop(1, "#0d0620");
+  ctx.fillStyle = bg; ctx.fill(); ctx.lineWidth = 3; glow(ctx, C.cyan, 16); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.fillStyle = C.mag; ctx.globalAlpha = 0.8;            // collar light
+  ctx.beginPath(); ctx.ellipse(0, -s * 0.45, s * 0.45, s * 0.12, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.restore();
+  // head
+  ctx.translate(AV.x, AV.y); ctx.rotate(AV.roll);
+  const fx = AV.yaw * s * 0.7, fy = AV.pitch * s * 3.2;
+  for (const sx of [-1, 1]) {                                          // ears
+    ctx.beginPath(); ctx.moveTo(sx * s * 0.95, -s * 0.35); ctx.lineTo(sx * s * 0.85, -s * 1.35); ctx.lineTo(sx * s * 0.25, -s * 0.85); ctx.closePath();
+    ctx.fillStyle = "#1d0b40"; ctx.fill(); ctx.lineWidth = 3; glow(ctx, C.mag, 14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx * s * 0.8, -s * 0.55); ctx.lineTo(sx * s * 0.76, -s * 1.05); ctx.lineTo(sx * s * 0.42, -s * 0.8); ctx.closePath();
+    ctx.fillStyle = hexA(C.cyan, .45); ctx.fill();
+  }
+  const hg = ctx.createRadialGradient(-s * 0.3, -s * 0.4, s * 0.2, 0, 0, s * 1.15);
+  hg.addColorStop(0, "#3b1a72"); hg.addColorStop(1, "#120728");
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 1.05, s * 0.95, 0, 0, Math.PI * 2);
+  ctx.fillStyle = hg; ctx.fill(); ctx.lineWidth = 3.5; glow(ctx, C.mag, 22 + 30 * glowNod); ctx.stroke();
+  // antenna with a light that flares on every nod
+  const bob = Math.sin(t / 260) * s * 0.05;
+  ctx.lineWidth = 2.5; glow(ctx, C.cyan, 10); ctx.beginPath(); ctx.moveTo(0, -s * 0.95); ctx.quadraticCurveTo(s * 0.12, -s * 1.25, bob, -s * 1.5); ctx.stroke();
+  ctx.fillStyle = C.amber; ctx.shadowColor = C.amber; ctx.shadowBlur = 18 + 40 * glowNod;
+  ctx.beginPath(); ctx.arc(bob, -s * 1.5, s * (0.11 + 0.06 * glowNod), 0, Math.PI * 2); ctx.fill();
+  // eyes squash when you blink
+  for (const [sx, blink] of [[-1, AV.blinkL], [1, AV.blinkR]]) {
+    const ex = sx * s * 0.38 + fx, ey = -s * 0.08 + fy, ew = s * 0.3, eh = Math.max(s * 0.03, s * 0.36 * (1 - clamp(blink * 1.15, 0, 1)));
+    ctx.fillStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 18;
+    ctx.beginPath(); ctx.roundRect(ex - ew / 2, ey - eh / 2, ew, eh, Math.min(ew, eh) / 2); ctx.fill();
+    if (eh > s * 0.15) { ctx.shadowBlur = 0; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex - ew * 0.15, ey - eh * 0.2, s * 0.045, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.shadowBlur = 0; ctx.fillStyle = hexA(C.mag, .35);              // cheeks
+  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sx * s * 0.62 + fx * 0.8, s * 0.26 + fy, s * 0.14, s * 0.08, 0, 0, Math.PI * 2); ctx.fill(); }
+  // mouth: a smile line that opens into a glowing "o"
+  const mx = fx, my = s * 0.42 + fy, mw = s * 0.2 * (1 + AV.smile * 0.6), open = AV.jaw * s * 0.38;
+  ctx.lineWidth = 3; glow(ctx, C.mag, 12);
+  if (open < s * 0.04) { ctx.beginPath(); ctx.moveTo(mx - mw, my); ctx.quadraticCurveTo(mx, my + s * (0.08 + 0.12 * AV.smile), mx + mw, my); ctx.stroke(); }
+  else { ctx.fillStyle = "#08030f"; ctx.beginPath(); ctx.ellipse(mx, my + open * 0.3, mw * 0.9, open * 0.6 + s * 0.03, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+}
+
+// ───────── recording: the stage (camera or avatar) plus the instrument's own audio ─────────
+let rec = null;
+let recStarting = false;
+async function startRec() {
+  if (rec || !ac || recStarting) return;
+  recStarting = true;
+  const c = document.createElement("canvas"); c.width = hud.width; c.height = hud.height;
+  const dest = ac.createMediaStreamDestination(); audioOut.connect(dest);
+  // Your voice goes into the recording only, never to the speakers, so it cannot feed back.
+  // Processing is off so singing keeps its dynamics; wear headphones so the mic does not pick up the instrument.
+  let micStream = null;
+  if ($("mic").checked) {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      ac.createMediaStreamSource(micStream).connect(dest);
+    } catch { setStatus("Microphone not available. Recording the instrument only.", true); }
+  }
+  recStarting = false;
+  const stream = new MediaStream([...c.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mime = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"].find(m => MediaRecorder.isTypeSupported(m)) ?? "";
+  const mr = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8e6 } : undefined);
+  const chunks = [];
+  mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  mr.onstop = () => {
+    const type = mr.mimeType || "video/webm", ext = type.includes("mp4") ? "mp4" : "webm";
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(chunks, { type }));
+    a.download = `nodchord_${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    try { audioOut.disconnect(dest); } catch {}
+    micStream?.getTracks().forEach(tr => tr.stop());
+  };
+  mr.start(500);
+  rec = { mr, c, x: c.getContext("2d"), t0: performance.now() };
+  $("recBtn").textContent = "■ Stop recording"; $("recBtn").classList.add("on"); $("recBadge").hidden = false;
+}
+function stopRec() {
+  if (!rec) return;
+  rec.mr.stop(); rec = null;
+  $("recBtn").textContent = "● Record video"; $("recBtn").classList.remove("on"); $("recBadge").hidden = true;
+}
+function compositeRec(R, dpr) {
+  const { c, x } = rec;
+  x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = "#000"; x.fillRect(0, 0, c.width, c.height);
+  if (S.view === "camera" && video.videoWidth) {
+    x.save(); x.filter = "saturate(.75) contrast(1.05) brightness(.8)";
+    x.translate((R.x + R.w) * dpr, R.y * dpr); x.scale(-1, 1); x.drawImage(video, 0, 0, R.w * dpr, R.h * dpr); x.restore();
+  }
+  x.drawImage(hud, 0, 0, c.width, c.height);
+  const sec = Math.floor((performance.now() - rec.t0) / 1000);
+  $("recTime").textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+function setView(v) {
+  S.view = v;
+  document.querySelector(".stage").classList.toggle("avatar", v === "avatar");
+  $("viewCam").setAttribute("aria-pressed", v === "camera"); $("viewAv").setAttribute("aria-pressed", v === "avatar");
+}
+function toggleFullscreen() {
+  const st = document.querySelector(".stage");
+  document.fullscreenElement ? document.exitFullscreen() : st.requestFullscreen?.();
+}
+
+const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function drawFX(ctx, R, t) {
+  ctx.save();
+  const fa = 1 - (t - FX.flash) / 260;                                   // brief magenta wash
+  if (fa > 0) { ctx.fillStyle = `rgba(255,43,214,${(REDUCE ? 0.08 : 0.16) * fa})`; ctx.fillRect(R.x, R.y, R.w, R.h); }
+  FX.waves = FX.waves.filter(w => t - w.t0 < 900);
+  if (!REDUCE) for (const w of FX.waves) {                               // three neon rings racing out from the face
+    const k = (t - w.t0) / 900, ease = 1 - Math.pow(1 - k, 3);
+    const cx = R.x + w.nx * R.w, cy = R.y + w.ny * R.h, maxR = Math.hypot(R.w, R.h) * 0.85;
+    for (const [col, lag, lw] of [[C.mag, 0, 7], [C.cyan, 0.08, 4], [C.amber, 0.16, 2]]) {
+      const kk = ease - lag; if (kk <= 0) continue;
+      ctx.globalAlpha = (1 - k) * 0.9; ctx.lineWidth = lw * (1 - k) + 1; glow(ctx, col, 26);
+      ctx.beginPath(); ctx.arc(cx, cy, kk * maxR, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  FX.pops = FX.pops.filter(p => t - p.t0 < 1000);
+  for (const p of FX.pops) {                                             // note names flying up off the fingertips
+    const k = (t - p.t0) / 1000; if (k < 0) continue;
+    const bx = R.x + p.nx * R.w, by = R.y + p.ny * R.h;
+    const y = by - 34 - 90 * (1 - Math.pow(1 - k, 2)), sc = 1 + 0.6 * Math.min(1, k * 4);
+    ctx.globalAlpha = 1 - k; ctx.font = `700 ${Math.round(22 * sc)}px ${FONT_TECH}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.shadowColor = p.col; ctx.shadowBlur = 22; ctx.fillStyle = "#fff"; ctx.fillText(p.text, bx, y);
+    if (!REDUCE) {
+      ctx.fillStyle = p.col;
+      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + p.nx * 20, r = 10 + 55 * k; ctx.beginPath(); ctx.arc(bx + Math.cos(a) * r, by + Math.sin(a) * r, 2.6 * (1 - k) + 0.5, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+  ctx.restore();
+}
+
+// Face markers and a nod meter: the bar fills as your head tips; crossing the line plays the chord.
+function drawFace(ctx, R, t) {
+  const cx = R.x + R.w * 0.5, top = R.y + 16;
+  ctx.save();
+  if (rec && !cal) { ctx.restore(); return; }                       // keep recordings clean
+  if (lastFace && S.view === "camera") {
+    const P = i => [R.x + (1 - lastFace[i].x) * R.w, R.y + lastFace[i].y * R.h];
+    ctx.fillStyle = C.amber; ctx.shadowColor = C.amber; ctx.shadowBlur = 10;
+    for (const i of [33, 263, 1, 10, 152]) { const [x, y] = P(i); ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
+  }
+  const thr = cal && cal.phase === "nod" ? 0.015 : nodThr();
+  const w = 200, h = 10, x0 = cx - w / 2, y0 = top + (cal ? 74 : 0);
+  ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = "rgba(236,232,255,.4)"; ctx.strokeRect(x0, y0, w, h);
+  const full = thr * 2;
+  const fill = clamp(Math.abs(NOD.dev) / full, 0, 1);
+  const flash = t - NOD.flash < 220;
+  ctx.fillStyle = flash ? C.lime : C.amber; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = flash ? 24 : 10;
+  ctx.fillRect(x0, y0, w * fill, h);
+  ctx.strokeStyle = C.mag; ctx.shadowColor = C.mag; ctx.shadowBlur = 8; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x0 + w / 2, y0 - 4); ctx.lineTo(x0 + w / 2, y0 + h + 4); ctx.stroke();
+  ctx.font = `700 12px ${FONT_TECH}`; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillStyle = flash ? C.lime : "rgba(236,232,255,.7)"; ctx.shadowBlur = flash ? 14 : 0;
+  ctx.fillText(lastFace ? (flash ? "NOD" : "NOD METER") : "FACE NOT FOUND", cx, y0 + h + 5);
+  ctx.restore();
+}
+
+function drawPrompt(ctx, R) {
+  let title = "", sub = "";
+  if (cal.phase === "nod") { title = `Nod three times (${cal.peaks.length}/3)`; sub = "A normal, clear nod. Keep your hands wherever you like for now."; }
+  else if (cal.phase === "align") { title = "Hands into the outlines"; sub = "Both hands, or just the one you will use. Hold still for a second."; }
+  else {
+    title = cal.shape === "penta" ? `Five-finger shape · nod ${cal.count + 1} of ${NODS_PER_SHAPE}` : `C–E–G–C shape · nod ${cal.count + 1} of ${NODS_PER_SHAPE}`;
+    sub = cal.count ? "Relax your hands, form the shape again, then nod." : "Form the shape shown on the keyboard, then nod.";
+    const quiet = performance.now() - Math.max(NOD.lastNod, cal.shapeStart ?? 0);
+    if (quiet > 6000) sub = lastFace ? "No nod is getting through. Watch the nod meter at the top and nod until it flashes green."
+                                     : "Your face is out of frame. Sit back until the meter stops saying FACE NOT FOUND.";
+  }
+  ctx.save();
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.font = `700 26px ${FONT_TECH}`; ctx.shadowColor = C.mag; ctx.shadowBlur = 18; ctx.fillStyle = "#fff";
+  ctx.fillText(title, R.x + 18, R.y + 14);
+  ctx.shadowBlur = 0; ctx.font = `14px ${FONT_BODY}`; ctx.fillStyle = "rgba(236,232,255,.75)";
+  ctx.fillText(sub, R.x + 20, R.y + 48);
+  ctx.restore();
+}
+
+let lastReadout = 0;
+function renderReadout() {
+  const now = performance.now(); if (now - lastReadout < 60) return; lastReadout = now;
+  $("chordNow").textContent = chordName(["R", "L"].flatMap(h => Object.values(HANDS[h].sounding)));
+  const prev = mode === "play" && !cal ? ["R", "L"].filter(h => active(HANDS[h]) && HANDS[h].cur)
+    .flatMap(h => FK.filter(k => k === "T" || !S.onlyExt || HANDS[h].ext[k]).map(k => HANDS[h].cur[k])) : [];
+  $("chordPreview").textContent = prev.length ? chordName(prev) : "—";
+  $("rootR").textContent = noteName(roots.R); $("rootL").textContent = noteName(roots.L);
+  $("chips").innerHTML = ["R", "L"].map(h => {
+    const H = HANDS[h], shown = mode === "play" && active(H) ? H.cur : null;
+    return `<span class="who">${HNAME[h]}</span><div class="set">` + FK.map(k => {
+      const silent = k !== "T" && S.onlyExt && H.ext[k] === false;
+      return `<span class="${H.sounding[k] != null ? "on" : ""} ${silent ? "off" : ""}" style="--c:var(--${k})"><i></i>${FNAME[k]} <b>${shown && !silent ? noteName(shown[k]) : ""}</b></span>`;
+    }).join("") + `</div>`;
+  }).join("");
+}
+function setStatus(msg, warn = false) { const s = $("status"); s.textContent = msg; s.classList.toggle("warn", warn); }
+function updateLogInfo() { $("logInfo").textContent = `${log.length} rows`; $("csvBtn").disabled = false; }
+
+// ───────── UI ─────────
+function setMode(m) {
+  if (cal) calCancel();
+  mode = m;
+  $("tabCal").setAttribute("aria-selected", m === "cal"); $("tabPlay").setAttribute("aria-selected", m === "play");
+  $("calPanel").hidden = m !== "cal"; $("playPanel").hidden = m !== "play";
+}
+$("tabCal").onclick = () => setMode("cal");
+$("tabPlay").onclick = () => setMode("play");
+$("goPlay").onclick = () => setMode("play");
+$("startBtn").onclick = start;
+$("calStart").onclick = () => { if (ready) calBegin(); };
+$("calCancel").onclick = calCancel;
+$("skipAlign").onclick = () => { if (cal?.phase === "align") startShapes(); };
+$("onlyExt").onchange = e => { S.onlyExt = e.target.checked; };
+$("guides").onchange = e => { S.guides = e.target.checked; };
+$("black").onchange = e => { S.black = e.target.checked; HANDS.R.snapPrev = {}; HANDS.L.snapPrev = {}; };
+$("sens").oninput = e => { S.sens = +e.target.value; $("sensV").textContent = `${S.sens.toFixed(1)}×`; };
+$("sound").onchange = e => { S.sound = e.target.checked; if (!S.sound) Object.keys(voices).forEach(noteOff); };
+
+function moveRoot(h, m) { roots[h] = clamp(m, 24, 96); HANDS[h].snapPrev = {}; }
+function stepWhite(h, dir) {
+  const p = midiToPos(roots[h]);
+  moveRoot(h, posToMidi(Number.isInteger(p) ? p + dir : (dir > 0 ? Math.ceil(p) : Math.floor(p))) ?? roots[h]);
+}
+function keyAt(e) {
+  const r = hud.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const inK = k => x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h;
+  return keyRects.filter(k => k.black).find(inK) ?? keyRects.find(k => !k.black && inK(k));
+}
+hud.addEventListener("click", e => { if (mode === "play" && !cal) { const k = keyAt(e); if (k) moveRoot("R", k.m); } });
+hud.addEventListener("contextmenu", e => { if (mode === "play" && !cal) { e.preventDefault(); const k = keyAt(e); if (k) moveRoot("L", k.m); } });
+$("inst").onchange = e => { S.inst = e.target.value; };
+$("viewCam").onclick = () => setView("camera");
+$("viewAv").onclick = () => setView("avatar");
+$("recBtn").onclick = () => rec ? stopRec() : startRec();
+$("fsBtn").onclick = toggleFullscreen;
+document.addEventListener("keydown", e => {
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) || e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "v") setView(S.view === "camera" ? "avatar" : "camera");
+  else if (k === "r" && ready) rec ? stopRec() : startRec();
+  else if (k === "f") toggleFullscreen();
+});
+document.addEventListener("keydown", e => {
+  if (mode !== "play" || cal) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const pick = { "1": "piano", "2": "epiano", "3": "guitar" }[key];
+  if (pick && e.target.tagName !== "SELECT") { S.inst = pick; $("inst").value = pick; return; }
+  const map = { ArrowRight: ["R", 1], ArrowLeft: ["R", -1], d: ["L", 1], a: ["L", -1] };
+  const oct = { ArrowUp: ["R", 12], ArrowDown: ["R", -12], w: ["L", 12], s: ["L", -12] };
+  if (map[key]) { e.preventDefault(); const [h, dir] = map[key]; e.shiftKey ? moveRoot(h, roots[h] + dir) : stepWhite(h, dir); }
+  else if (oct[key]) { e.preventDefault(); const [h, d] = oct[key]; moveRoot(h, roots[h] + d); }
+});
+$("csvBtn").onclick = () => {
+  const head = ["t_s","phase","hand","shape","nod_size",...LONG.map(k => `x_${k}`),...LONG.map(k => `target_d_${k}`),...LONG.map(k => `extended_${k}`),
+    ...FK.map(k => `midi_${k}`), ...Array.from({ length: 21 }, (_, i) => [`w${i}_x`, `w${i}_y`, `w${i}_z`]).flat()];
+  const meta = [`# nodchord v1`, `# exported ${new Date().toISOString()}`, `# store ${JSON.stringify(store)}`,
+    `# one row per hand per nod; hand state read 80 ms before the nod was detected`,
+    `# x = fingertip sideways position from the middle knuckle (palm widths); target_d = white keys from thumb in the calibration shape`,
+    `# nod_size = head-pitch excursion (nose-below-eyes / face height) at detection; w = world landmarks (m)`];
+  const csv = [...meta, head.join(","), ...log.map(r => r.join(","))].join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `nodchord_log_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+window.addEventListener("resize", () => draw(performance.now()));
+renderSteps();
+init();
+</script>
+</body>
+</html>
